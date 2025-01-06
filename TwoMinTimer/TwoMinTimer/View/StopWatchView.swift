@@ -81,9 +81,15 @@ struct StopWatchView: View {
                         .font(.system(size: 14, design: .serif))
                 }
                 .foregroundStyle(.secondary)
-                .opacity(0.7)
+                .opacity(!timerManager.isStopwatchRunning ? 0.7 : 0)
+                .animation(.easeInOut, value: timerManager.isStopwatchRunning)
                 .padding(.bottom, 75)
             }
+        }
+        .frame(maxWidth: .infinity)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            timerManager.toggleStopwatch()
         }
         .ignoresSafeArea()
     }

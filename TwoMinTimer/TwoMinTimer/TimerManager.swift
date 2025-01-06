@@ -20,6 +20,9 @@ class TimerManager: ObservableObject {
     @Published var showingSheet = false
     @Published var showingAlert = false
     @Published var pausedElapsedTime: TimeInterval = 0
+    @Published var isStopwatchRunning = true
+    @Published private var lastPauseTime: Date?
+    @Published private var totalPausedTime: TimeInterval = 0
     
     private var timerCancellable: AnyCancellable?
     private let feedback = UINotificationFeedbackGenerator()
@@ -53,7 +56,7 @@ class TimerManager: ObservableObject {
             lastStartTime = startTime
         }
         
-        timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
+        timerCancellable = Timer.publish(every: 0.5, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self = self else { return }
@@ -106,27 +109,50 @@ class TimerManager: ObservableObject {
         lastStartTime = nil
         isCompleted = false
         elapsedTime = 0
+        totalPausedTime = 0
+        lastPauseTime = nil
         
         removeScheduledNotification()
     }
     
     // MARK: - Stopwatch Controls
     private func startStopwatch() {
-        timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
+        isStopwatchRunning = true
+        
+        if let startTime = self.lastStartTime {
+            self.elapsedTime = Date().timeIntervalSince(startTime) - self.totalPausedTime
+        }
+        
+        timerCancellable = Timer.publish(every: 0.5, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self = self, let startTime = self.lastStartTime else { return }
-                self.elapsedTime = Date().timeIntervalSince(startTime)
+                self.elapsedTime = Date().timeIntervalSince(startTime) - self.totalPausedTime
             }
     }
     
+    func toggleStopwatch() {
+        isStopwatchRunning.toggle()
+        if isStopwatchRunning {
+            resumeStopwatch()
+        } else {
+            pauseStopwatch()
+        }
+    }
+    
     func pauseStopwatch() {
+        isStopwatchRunning = false
         timerCancellable?.cancel()
         timerCancellable = nil
+        lastPauseTime = Date()
         pausedTime = elapsedTime
     }
     
     func resumeStopwatch() {
+        if let pauseTime = lastPauseTime {
+            totalPausedTime += Date().timeIntervalSince(pauseTime)
+        }
+        lastPauseTime = nil
         startStopwatch()
     }
     
