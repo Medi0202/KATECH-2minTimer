@@ -10,11 +10,13 @@ import SwiftUI
 @main
 struct TwoMinTimerApp: App {
     @StateObject var timerManager = TimerManager()
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
     
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(timerManager)
+                .preferredColorScheme(isDarkMode ? .dark : .light)
         }
     }
 }

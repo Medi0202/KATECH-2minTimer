@@ -10,6 +10,8 @@ import SwiftUI
 struct SheetView: View {
     @EnvironmentObject var timerManager: TimerManager
     @State private var stats: (lastDayTasks: Int, lastDayTime: TimeInterval, totalTasks: Int, totalTime: TimeInterval)?
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
         VStack {
@@ -44,6 +46,22 @@ struct SheetView: View {
                             Spacer()
                             Text(timerManager.formatTime(stats.totalTime))
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    Section {
+                        HStack {
+                            Text("Change Theme")
+                            Spacer()
+                            Text(isDarkMode ? "Dark" : "Light")
+                                .foregroundStyle(.secondary)
+                                .padding(.trailing, 8)
+                            Toggle("", isOn: Binding(
+                                get: { isDarkMode },
+                                set: { isDarkMode = $0 }
+                            ))
+                                .labelsHidden()
+                                .toggleStyle(SwitchToggleStyle())
                         }
                     }
                 }
