@@ -14,6 +14,8 @@ class TimerManager: ObservableObject {
     @Published var isCompleted = false
     @Published var elapsedTime: TimeInterval = 0
     @Published var pausedTime: TimeInterval = 0
+    @Published var showingSheet = false
+    @Published var showingAlert = false
     
     private var timer: Timer?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -183,5 +185,17 @@ class TimerManager: ObservableObject {
     
     func resumeStopwatch() {
         startStopwatch()
+    }
+    
+    func formatTime(_ timeInterval: TimeInterval) -> String {
+        let hours = Int(timeInterval) / 3600
+        let minutes = Int(timeInterval) / 60 % 60
+        let seconds = Int(timeInterval) % 60
+        
+        if hours > 0 {
+            return String(format: "%dh %dm %ds", hours, minutes, seconds)
+        } else {
+            return String(format: "%dm %ds", minutes, seconds)
+        }
     }
 }

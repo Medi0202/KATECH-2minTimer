@@ -9,9 +9,7 @@ import SwiftUI
 import Lottie
 
 struct StopWatchView: View {
-    @ObservedObject var timerManager: TimerManager
-    @State private var showingAlert = false
-    @State private var showingSheet = false
+    @EnvironmentObject var timerManager: TimerManager
     @State private var opacity: Double = 0.6
     
     var body: some View {
@@ -27,14 +25,14 @@ struct StopWatchView: View {
                     Text("You've been focused for")
                         .font(.system(size: 14, design: .serif))
                     
-                    Text(formatElapsedTime(timerManager.elapsedTime))
+                    Text(timerManager.formatTime(timerManager.elapsedTime))
                         .font(.system(size: 48, design: .serif))
                         .italic()
                         .padding(.vertical, -8)
                 }
                 
                 Button {
-                    showingAlert = true
+                    timerManager.showingAlert = true
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "stop.circle")
@@ -50,7 +48,7 @@ struct StopWatchView: View {
                     .foregroundStyle(.primary)
                 }
                 .buttonStyle(.plain)
-                .alert("Save Focus Session", isPresented: $showingAlert) {
+                .alert("Save Focus Session", isPresented: $timerManager.showingAlert) {
                     Button("Yes") {
                         withAnimation {
                             timerManager.saveFocusSession()
@@ -88,17 +86,5 @@ struct StopWatchView: View {
             }
         }
         .ignoresSafeArea()
-    }
-    
-    private func formatElapsedTime(_ timeInterval: TimeInterval) -> String {
-        let hours = Int(timeInterval) / 3600
-        let minutes = Int(timeInterval) / 60 % 60
-        let seconds = Int(timeInterval) % 60
-        
-        if hours > 0 {
-            return String(format: "%dh %dm %ds", hours, minutes, seconds)
-        } else {
-            return String(format: "%dm %ds", minutes, seconds)
-        }
     }
 }

@@ -8,19 +8,18 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var timerManager = TimerManager()
-    @State private var showingSheet = false
+    @EnvironmentObject var timerManager: TimerManager
     
     var body: some View {
         ZStack {
             if !timerManager.isCompleted {
-                TimerView(timerManager: timerManager)
+                TimerView()
                     .transition(.asymmetric(
                         insertion: .opacity.animation(.easeInOut(duration: 1).delay(1)),
                         removal: .opacity.animation(.easeInOut(duration: 1))
                     ))
             } else {
-                StopWatchView(timerManager: timerManager)
+                StopWatchView()
                     .transition(.asymmetric(
                         insertion: .opacity.animation(.easeInOut(duration: 1).delay(1)),
                         removal: .opacity.animation(.easeInOut(duration: 1))
@@ -33,15 +32,15 @@ struct ContentView: View {
             DragGesture()
                 .onEnded { gesture in
                     if gesture.translation.height < -50 {
-                                    Task { @MainActor in
-                                        showingSheet = true
-                                    }
-                                }
+                        Task { @MainActor in
+                            timerManager.showingSheet = true
+                        }
+                    }
                 }
         )
-        .sheet(isPresented: $showingSheet) {
+        .sheet(isPresented: $timerManager.showingSheet) {
             NavigationStack {
-                SheetView(timerManager: timerManager)
+                SheetView()
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)

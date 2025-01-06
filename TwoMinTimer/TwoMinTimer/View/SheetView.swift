@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct SheetView: View {
-    @ObservedObject var timerManager: TimerManager
+    @EnvironmentObject var timerManager: TimerManager
     @State private var stats: (lastDayTasks: Int, lastDayTime: TimeInterval, totalTasks: Int, totalTime: TimeInterval)?
     
     var body: some View {
@@ -26,14 +26,14 @@ struct SheetView: View {
                         HStack {
                             Text("Time Focused")
                             Spacer()
-                            Text(formatTime(stats.lastDayTime))
+                            Text(timerManager.formatTime(stats.lastDayTime))
                                 .foregroundStyle(.secondary)
                         }
                     }
                     
                     Section(header: Text("Your Achievements")) {
                         HStack {
-                            Text("Tasks")
+                            Text("Tasks Completed")
                             Spacer()
                             Text("\(stats.totalTasks)")
                                 .foregroundStyle(.secondary)
@@ -42,7 +42,7 @@ struct SheetView: View {
                         HStack {
                             Text("Time Focused")
                             Spacer()
-                            Text(formatTime(stats.totalTime))
+                            Text(timerManager.formatTime(stats.totalTime))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -53,18 +53,6 @@ struct SheetView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             stats = timerManager.getStatisticsData()
-        }
-    }
-    
-    private func formatTime(_ time: TimeInterval) -> String {
-        let hours = Int(time) / 3600
-        let minutes = Int(time) / 60 % 60
-        let seconds = Int(time) % 60
-        
-        if hours > 0 {
-            return String(format: "%dh %dm %ds", hours, minutes, seconds)
-        } else {
-            return String(format: "%dm %ds", minutes, seconds)
         }
     }
 }

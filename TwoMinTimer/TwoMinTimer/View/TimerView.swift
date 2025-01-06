@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct TimerView: View {
-    @ObservedObject var timerManager: TimerManager
+    @EnvironmentObject var timerManager: TimerManager
     private let feedback = UINotificationFeedbackGenerator()
     
     var body: some View {
