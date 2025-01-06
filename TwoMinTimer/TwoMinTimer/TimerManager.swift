@@ -6,9 +6,12 @@
 //
 
 import SwiftUI
+import Combine
 
 class TimerManager: ObservableObject {
-    @Published var timeRemaining: Int = 120
+    static let defaultTimerDuration: Int = 120
+
+    @Published var timeRemaining: Int = defaultTimerDuration
     @Published var isTimerRunning = false
     @Published var startTime: Date?
     @Published var isCompleted = false
@@ -16,16 +19,15 @@ class TimerManager: ObservableObject {
     @Published var pausedTime: TimeInterval = 0
     @Published var showingSheet = false
     @Published var showingAlert = false
+    @Published var pausedElapsedTime: TimeInterval = 0
     
-    private var timer: Timer?
-    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
+    private var timerCancellable: AnyCancellable?
     private let feedback = UINotificationFeedbackGenerator()
     
     @AppStorage("totalTasks") private var totalTasks: Int = 0
     @AppStorage("totalFocusedTime") private var totalFocusedTime: TimeInterval = 0
     @AppStorage("recentSessions") private var recentSessionsData: Data = Data()
-
-    private var backgroundStartTime: Date?
+    @AppStorage("lastStartTime") private var lastStartTimeInterval: Double?
     
     init() {
         setupNotifications()
@@ -45,32 +47,40 @@ class TimerManager: ObservableObject {
     private func startTimer() {
         if startTime == nil {
             startTime = Date()
-            backgroundStartTime = Date()
+            lastStartTime = startTime
         } else {
-            backgroundStartTime = Date()
+            startTime = Date().addingTimeInterval(-pausedElapsedTime)
+            lastStartTime = startTime
         }
         
-        registerBackgroundTask()
-        
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self = self else { return }
-            
-            if self.timeRemaining > 0 {
-                self.timeRemaining -= 1
+        timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self = self else { return }
+                
+                if let startTime = self.startTime {
+                    let elapsed = Int(Date().timeIntervalSince(startTime))
+                    self.timeRemaining = max(Self.defaultTimerDuration - elapsed, 0)
+                    
+                    if self.timeRemaining == 0 {
+                        self.timerCompleted()
+                    }
+                }
             }
-            
-            if self.timeRemaining == 0 {
-                self.timerCompleted()
-            }
-        }
         
-        scheduleNotification()
+        removeScheduledNotification()
+        scheduleNotification(with: TimeInterval(timeRemaining))
     }
     
     private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
-        endBackgroundTask()
+        timerCancellable?.cancel()
+        timerCancellable = nil
+        
+        if let startTime = startTime {
+            pausedElapsedTime = Date().timeIntervalSince(startTime)
+        }
+        
+        removeScheduledNotification()
     }
     
     private func timerCompleted() {
@@ -80,7 +90,11 @@ class TimerManager: ObservableObject {
         
         feedback.notificationOccurred(.success)
         
-        startTime = Date().addingTimeInterval(-120)
+        if let savedStartTime = lastStartTime {
+            startTime = savedStartTime
+        } else {
+            startTime = Date().addingTimeInterval(-120)
+        }
         startStopwatch()
     }
     
@@ -89,55 +103,71 @@ class TimerManager: ObservableObject {
         timeRemaining = 120
         isTimerRunning = false
         startTime = nil
+        lastStartTime = nil
         isCompleted = false
         elapsedTime = 0
         
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["timerComplete"])
+        removeScheduledNotification()
     }
     
+    // MARK: - Stopwatch Controls
     private func startStopwatch() {
-        startTime = Date()
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            guard let self = self, let startTime = self.startTime else { return }
-            self.elapsedTime = Date().timeIntervalSince(startTime) + 120
-        }
+        timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self = self, let startTime = self.lastStartTime else { return }
+                self.elapsedTime = Date().timeIntervalSince(startTime)
+            }
+    }
+    
+    func pauseStopwatch() {
+        timerCancellable?.cancel()
+        timerCancellable = nil
+        pausedTime = elapsedTime
+    }
+    
+    func resumeStopwatch() {
+        startStopwatch()
     }
     
     // MARK: - Notification Controls
     private func setupNotifications() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error = error {
+                print("Notification permission request error: \(error)")
+                return
+            }
+            
+            if granted {
+                print("Notification permission granted")
+            } else {
+                print("Notification permission denied")
+            }
         }
     }
-
-    private func registerBackgroundTask() {
-        backgroundTask = UIApplication.shared.beginBackgroundTask { [weak self] in
-            self?.endBackgroundTask()
-        }
+    
+    private func scheduleNotification(with timeInterval: TimeInterval) {
+        print("Scheduling notification in: \(timeInterval) seconds")
         
-        // 25초 후에 자동으로 백그라운드 태스크를 종료하도록 설정
-        DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in
-            self?.endBackgroundTask()
-        }
-    }
-    
-    private func endBackgroundTask() {
-        if backgroundTask != .invalid {
-            UIApplication.shared.endBackgroundTask(backgroundTask)
-            backgroundTask = .invalid
-            backgroundStartTime = nil
-        }
-    }
-    
-    private func scheduleNotification() {
         let content = UNMutableNotificationContent()
         content.title = "2-Minute Timer Complete"
         content.body = "Task finished? Awesome!\nStill working? Stay in the flow!"
         content.sound = .default
         
-        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: Double(timeRemaining), repeats: false)
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: timeInterval, repeats: false)
         let request = UNNotificationRequest(identifier: "timerComplete", content: content, trigger: trigger)
         
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("Notification scheduling error: \(error)")
+            } else {
+                print("Notification scheduled successfully")
+            }
+        }
+    }
+    
+    private func removeScheduledNotification() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["timerComplete"])
     }
     
     // MARK: - Storing focus sessions
@@ -177,16 +207,7 @@ class TimerManager: ObservableObject {
         return (recentSessions.count, lastDayTime, totalTasks, totalFocusedTime)
     }
     
-    func pauseStopwatch() {
-        timer?.invalidate()
-        timer = nil
-        pausedTime = elapsedTime
-    }
-    
-    func resumeStopwatch() {
-        startStopwatch()
-    }
-    
+    // MARK: - Shared
     func formatTime(_ timeInterval: TimeInterval) -> String {
         let hours = Int(timeInterval) / 3600
         let minutes = Int(timeInterval) / 60 % 60
@@ -196,6 +217,18 @@ class TimerManager: ObservableObject {
             return String(format: "%dh %dm %ds", hours, minutes, seconds)
         } else {
             return String(format: "%dm %ds", minutes, seconds)
+        }
+    }
+    
+    private var lastStartTime: Date? {
+        get {
+            if let timeInterval = lastStartTimeInterval {
+                return Date(timeIntervalSince1970: timeInterval)
+            }
+            return nil
+        }
+        set {
+            lastStartTimeInterval = newValue?.timeIntervalSince1970
         }
     }
 }
